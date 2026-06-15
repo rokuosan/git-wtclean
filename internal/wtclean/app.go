@@ -15,7 +15,10 @@ type Options struct {
 	Prune      bool
 	Verbose    bool
 	Help       bool
+	Version    bool
 }
+
+var Version = "dev"
 
 type Runner interface {
 	Output(ctx context.Context, name string, args ...string) ([]byte, error)
@@ -51,6 +54,10 @@ func (a *App) Run(ctx context.Context, args []string) int {
 	}
 	if opts.Help {
 		Usage(a.stdout)
+		return 0
+	}
+	if opts.Version {
+		writef(a.stdout, "git-wtclean %s\n", Version)
 		return 0
 	}
 
@@ -205,6 +212,8 @@ func ParseArgs(args []string) (Options, error) {
 			opts.Prune = true
 		case "-v", "--verbose":
 			opts.Verbose = true
+		case "--version":
+			opts.Version = true
 		case "-h", "--help":
 			opts.Help = true
 		default:
@@ -227,6 +236,7 @@ Options:
   -D                    Force remove worktrees with `+"`git worktree remove --force`"+`
   --prune               Run `+"`git worktree prune`"+` for each ghq repository
   -v, --verbose         Print each repository while pruning
+  --version             Show version
   -h                    Show this help
 
 Note:
