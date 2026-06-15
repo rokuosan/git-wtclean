@@ -2,3 +2,19 @@
 go = "1.26.4"
 golangci-lint = "2.12.2"
 shellcheck = "latest"
+
+[tasks.format]
+description = "Format Go source files"
+run = [
+  "gofmt -w ./cmd ./internal",
+  "golangci-lint fmt",
+]
+
+[tasks.lint]
+description = "Run Go tests and linters"
+run = [
+  "go test ./...",
+  "go vet ./...",
+  "golangci-lint config verify",
+  "golangci-lint run",
+]
