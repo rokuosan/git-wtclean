@@ -262,15 +262,17 @@ func ParseArgs(args []string) (Options, error) {
 
 func Usage(w io.Writer) {
 	writeString(w, `Usage:
-  git wtclean           Show linked worktrees under ghq repositories that would be removed
+  git wtclean           Show linked worktrees in the current repository that would be removed
   git wtclean -d        Remove them with `+"`git worktree remove`"+`
   git wtclean -D        Force remove them with `+"`git worktree remove --force`"+`
   git wtclean --prune   Prune stale worktree metadata with `+"`git worktree prune`"+`
+  git wtclean --all     Target every repository listed by `+"`ghq list -p`"+` instead of just the current one
 
 Options:
   -d                    Remove worktrees with `+"`git worktree remove`"+`
   -D                    Force remove worktrees with `+"`git worktree remove --force`"+`
-  --prune               Run `+"`git worktree prune`"+` for each ghq repository
+  --prune               Run `+"`git worktree prune`"+`
+  --all                 Target every ghq repository instead of the current one
   -v, --verbose         Print each repository while pruning
   --version             Show version
   -h                    Show this help
