@@ -156,6 +156,22 @@ func TestRunRejectsMultipleDeleteOptions(t *testing.T) {
 	}
 }
 
+func TestRunVersionPrintsVersion(t *testing.T) {
+	app, runner, stdout, stderr := newTestApp()
+
+	code := app.Run(context.Background(), []string{"--version"})
+
+	if code != 0 {
+		t.Fatalf("exit code = %d, stderr = %s", code, stderr.String())
+	}
+	if stdout.String() != "git-wtclean dev\n" {
+		t.Fatalf("stdout = %q, want %q", stdout.String(), "git-wtclean dev\n")
+	}
+	if len(runner.calls) != 0 {
+		t.Fatalf("calls = %#v, want none", runner.calls)
+	}
+}
+
 func newTestApp() (*App, *fakeRunner, *bytes.Buffer, *bytes.Buffer) {
 	runner := &fakeRunner{}
 	var stdout bytes.Buffer
