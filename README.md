@@ -11,6 +11,8 @@ It uses Git's native worktree commands:
 
 It does not delete branches.
 
+This tool is inspired by [`k1LoW/git-wt`](https://github.com/k1LoW/git-wt), but does not depend on it.
+
 ## Install
 
 ```sh
@@ -53,6 +55,7 @@ Print each repository while pruning:
 
 ```sh
 git wtclean --prune --verbose
+git wtclean --prune -v
 ```
 
 ## What It Removes
