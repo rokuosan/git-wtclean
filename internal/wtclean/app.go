@@ -13,6 +13,7 @@ import (
 type Options struct {
 	DeleteMode string
 	Prune      bool
+	All        bool
 	Verbose    bool
 	Help       bool
 	Version    bool
@@ -77,7 +78,7 @@ func (a *App) Run(ctx context.Context, args []string) int {
 func (a *App) run(ctx context.Context, opts Options) (Summary, error) {
 	var summary Summary
 
-	repos, err := a.listRepositories(ctx)
+	repos, err := a.repositories(ctx, opts)
 	if err != nil {
 		return summary, err
 	}
@@ -92,12 +93,41 @@ func (a *App) run(ctx context.Context, opts Options) (Summary, error) {
 	return summary, nil
 }
 
+func (a *App) repositories(ctx context.Context, opts Options) ([]string, error) {
+	if opts.All {
+		return a.listRepositories(ctx)
+	}
+
+	repo, err := a.currentRepo(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return []string{repo}, nil
+}
+
 func (a *App) listRepositories(ctx context.Context) ([]string, error) {
 	out, err := a.runner.Output(ctx, "ghq", "list", "-p")
 	if err != nil {
 		return nil, fmt.Errorf("ghq list -p failed: %w", err)
 	}
 	return splitLines(out), nil
+}
+
+// currentRepo resolves the repository containing the current directory and
+// returns the path of its primary worktree. Linked worktrees share the same
+// worktree list, so resolving to the primary keeps the rest of the pipeline
+// consistent regardless of which worktree the command was invoked from.
+func (a *App) currentRepo(ctx context.Context) (string, error) {
+	out, err := a.runner.Output(ctx, "git", "worktree", "list", "--porcelain", "-z")
+	if err != nil {
+		return "", fmt.Errorf("not inside a git repository (use --all to target all ghq repositories): %w", err)
+	}
+
+	worktrees := ParseWorktreeList(out)
+	if len(worktrees) == 0 || worktrees[0].Path == "" {
+		return "", errors.New("could not determine the current repository (use --all to target all ghq repositories)")
+	}
+	return worktrees[0].Path, nil
 }
 
 func (a *App) processRepo(ctx context.Context, opts Options, repo string, summary *Summary) {
@@ -214,6 +244,8 @@ func ParseArgs(args []string) (Options, error) {
 			opts.DeleteMode = arg
 		case "--prune":
 			opts.Prune = true
+		case "--all":
+			opts.All = true
 		case "-v", "--verbose":
 			opts.Verbose = true
 		case "--version":
