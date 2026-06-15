@@ -105,20 +105,24 @@ func (a *App) processRepo(ctx context.Context, opts Options, repo string, summar
 		return
 	}
 
-	paths, err := a.listLinkedWorktreePaths(ctx, repo)
-	if err != nil {
-		summary.Failed++
-		writef(a.stderr, "git wtclean: failed to list worktrees: %s: %v\n", repo, err)
-		return
-	}
-
-	for _, path := range paths {
-		summary.Found++
-		if opts.DeleteMode == "" {
-			writef(a.stdout, "Would remove: %s\n", path)
-			continue
+	// In pure prune mode (--prune without a delete option), only clean stale
+	// worktree metadata and skip listing active worktrees.
+	if opts.DeleteMode != "" || !opts.Prune {
+		paths, err := a.listLinkedWorktreePaths(ctx, repo)
+		if err != nil {
+			summary.Failed++
+			writef(a.stderr, "git wtclean: failed to list worktrees: %s: %v\n", repo, err)
+			return
 		}
-		a.removeWorktree(ctx, opts, repo, path, summary)
+
+		for _, path := range paths {
+			summary.Found++
+			if opts.DeleteMode == "" {
+				writef(a.stdout, "Would remove: %s\n", path)
+				continue
+			}
+			a.removeWorktree(ctx, opts, repo, path, summary)
+		}
 	}
 
 	if opts.Prune {
@@ -189,7 +193,7 @@ func (a *App) pruneRepo(ctx context.Context, opts Options, repo string, summary 
 func (a *App) printSummary(opts Options, summary Summary) {
 	if opts.DeleteMode == "" {
 		if opts.Prune {
-			writef(a.stdout, "Done. found=%d prune_checked=%d failed=%d\n", summary.Found, summary.PruneChecked, summary.Failed)
+			writef(a.stdout, "Done. prune_checked=%d failed=%d\n", summary.PruneChecked, summary.Failed)
 			return
 		}
 		writef(a.stdout, "Dry run. found=%d. Run %s to remove, or %s to force remove.\n", summary.Found, "'git wtclean -d'", "'git wtclean -D'")

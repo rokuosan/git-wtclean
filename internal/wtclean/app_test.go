@@ -107,9 +107,7 @@ func TestRunPruneQuietByDefault(t *testing.T) {
 	}
 
 	want := strings.Join([]string{
-		"Would remove: /tmp/repo1/.wt/feature-a",
-		"Would remove: /tmp/repo2/.wt/feature-b",
-		"Done. found=2 prune_checked=2 failed=0",
+		"Done. prune_checked=2 failed=0",
 		"",
 	}, "\n")
 	if stdout.String() != want {
@@ -118,6 +116,10 @@ func TestRunPruneQuietByDefault(t *testing.T) {
 
 	if got := runner.callsContaining("worktree prune"); len(got) != 2 {
 		t.Fatalf("prune call count = %d, want 2: %#v", len(got), got)
+	}
+
+	if got := runner.callsContaining("worktree list"); len(got) != 0 {
+		t.Fatalf("worktree list calls = %#v, want none", got)
 	}
 }
 
@@ -131,11 +133,9 @@ func TestRunPruneVerbosePrintsRepositories(t *testing.T) {
 	}
 
 	want := strings.Join([]string{
-		"Would remove: /tmp/repo1/.wt/feature-a",
 		"Pruning: /tmp/repo1",
-		"Would remove: /tmp/repo2/.wt/feature-b",
 		"Pruning: /tmp/repo2",
-		"Done. found=2 prune_checked=2 failed=0",
+		"Done. prune_checked=2 failed=0",
 		"",
 	}, "\n")
 	if stdout.String() != want {

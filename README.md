@@ -87,7 +87,7 @@ git -C <repo> worktree remove --force <path>
 git -C <repo> worktree prune
 ```
 
-This only cleans stale Git worktree metadata, such as records left after a worktree directory was removed manually. It does not remove branches.
+This only cleans stale Git worktree metadata, such as records left after a worktree directory was removed manually. By itself, `--prune` does not inspect or remove active linked worktrees. It does not remove branches.
 
 ## Help
 
