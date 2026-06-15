@@ -74,6 +74,23 @@ func TestRunOutsideRepositoryErrors(t *testing.T) {
 	}
 }
 
+func TestRunExcludesCurrentWorktree(t *testing.T) {
+	app, runner, stdout, stderr := newTestApp()
+	runner.currentWorktree = "/tmp/repo1/.wt/feature-a"
+
+	code := app.Run(context.Background(), []string{"-d"})
+
+	if code != 0 {
+		t.Fatalf("exit code = %d, stderr = %s", code, stderr.String())
+	}
+	if got := runner.callsContaining("worktree remove"); len(got) != 0 {
+		t.Fatalf("remove calls = %#v, want none (current worktree must be excluded)", got)
+	}
+	if !strings.Contains(stdout.String(), "found=0") {
+		t.Fatalf("stdout = %q, want found=0", stdout.String())
+	}
+}
+
 func TestRunDryRunAllListsLinkedWorktrees(t *testing.T) {
 	app, runner, stdout, stderr := newTestApp()
 
@@ -219,6 +236,9 @@ func newTestApp() (*App, *fakeRunner, *bytes.Buffer, *bytes.Buffer) {
 type fakeRunner struct {
 	calls       []string
 	outsideRepo bool
+	// currentWorktree overrides the path reported by `git rev-parse
+	// --show-toplevel`. Defaults to the primary worktree of repo1.
+	currentWorktree string
 }
 
 func (r *fakeRunner) Output(_ context.Context, name string, args ...string) ([]byte, error) {
@@ -237,6 +257,15 @@ func (r *fakeRunner) Output(_ context.Context, name string, args ...string) ([]b
 			[]string{"worktree /tmp/repo1/.wt/feature-a", "HEAD 2222222222222222222222222222222222222222", "branch refs/heads/feature-a"},
 			[]string{"worktree /tmp/repo1/.wt/bare-cache", "bare"},
 		), nil
+	case "git rev-parse --show-toplevel":
+		if r.outsideRepo {
+			return nil, errors.New("not a git repository")
+		}
+		top := r.currentWorktree
+		if top == "" {
+			top = "/tmp/repo1"
+		}
+		return []byte(top + "\n"), nil
 	case "git -C /tmp/repo1 rev-parse --git-dir", "git -C /tmp/repo2 rev-parse --git-dir":
 		return []byte(".git\n"), nil
 	case "git -C /tmp/not-git rev-parse --git-dir":

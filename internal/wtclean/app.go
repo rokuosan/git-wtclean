@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
+	"path/filepath"
 	"strings"
 )
 
@@ -83,11 +84,16 @@ func (a *App) run(ctx context.Context, opts Options) (Summary, error) {
 		return summary, err
 	}
 
+	// Never offer to remove the worktree the command is being run from:
+	// `git worktree remove` happily deletes a clean linked worktree, including
+	// the current checkout, leaving the user inside a deleted directory.
+	current := a.currentWorktree(ctx)
+
 	for _, repo := range repos {
 		if repo == "" {
 			continue
 		}
-		a.processRepo(ctx, opts, repo, &summary)
+		a.processRepo(ctx, opts, repo, current, &summary)
 	}
 
 	return summary, nil
@@ -130,7 +136,18 @@ func (a *App) currentRepo(ctx context.Context) (string, error) {
 	return worktrees[0].Path, nil
 }
 
-func (a *App) processRepo(ctx context.Context, opts Options, repo string, summary *Summary) {
+// currentWorktree returns the absolute path of the worktree containing the
+// current directory, or "" if it cannot be determined (e.g. when --all is run
+// outside any repository). Used to exclude the current checkout from removal.
+func (a *App) currentWorktree(ctx context.Context) string {
+	out, err := a.runner.Output(ctx, "git", "rev-parse", "--show-toplevel")
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
+}
+
+func (a *App) processRepo(ctx context.Context, opts Options, repo, current string, summary *Summary) {
 	if !a.isGitRepo(ctx, repo) {
 		return
 	}
@@ -138,7 +155,7 @@ func (a *App) processRepo(ctx context.Context, opts Options, repo string, summar
 	// In pure prune mode (--prune without a delete option), only clean stale
 	// worktree metadata and skip listing active worktrees.
 	if opts.DeleteMode != "" || !opts.Prune {
-		paths, err := a.listLinkedWorktreePaths(ctx, repo)
+		paths, err := a.listLinkedWorktreePaths(ctx, repo, current)
 		if err != nil {
 			summary.Failed++
 			writef(a.stderr, "git wtclean: failed to list worktrees: %s: %v\n", repo, err)
@@ -165,7 +182,7 @@ func (a *App) isGitRepo(ctx context.Context, repo string) bool {
 	return err == nil
 }
 
-func (a *App) listLinkedWorktreePaths(ctx context.Context, repo string) ([]string, error) {
+func (a *App) listLinkedWorktreePaths(ctx context.Context, repo, current string) ([]string, error) {
 	out, err := a.runner.Output(ctx, "git", "-C", repo, "worktree", "list", "--porcelain", "-z")
 	if err != nil {
 		return nil, err
@@ -177,9 +194,35 @@ func (a *App) listLinkedWorktreePaths(ctx context.Context, repo string) ([]strin
 		if i == 0 || wt.Bare || wt.Path == "" {
 			continue
 		}
+		// Skip the worktree the command is being run from so we never delete
+		// the user's current checkout.
+		if samePath(wt.Path, current) {
+			continue
+		}
 		paths = append(paths, wt.Path)
 	}
 	return paths, nil
+}
+
+// samePath reports whether two paths refer to the same location, resolving
+// symlinks so a worktree registered under, e.g., /tmp still matches a current
+// directory reported as /private/tmp.
+func samePath(a, b string) bool {
+	if a == "" || b == "" {
+		return false
+	}
+	if a == b {
+		return true
+	}
+	ra, err := filepath.EvalSymlinks(a)
+	if err != nil {
+		ra = filepath.Clean(a)
+	}
+	rb, err := filepath.EvalSymlinks(b)
+	if err != nil {
+		rb = filepath.Clean(b)
+	}
+	return ra == rb
 }
 
 func (a *App) removeWorktree(ctx context.Context, opts Options, repo, path string, summary *Summary) {
