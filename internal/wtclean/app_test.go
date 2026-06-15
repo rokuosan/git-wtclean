@@ -37,10 +37,64 @@ func TestParseWorktreeList(t *testing.T) {
 	}
 }
 
-func TestRunDryRunListsLinkedWorktrees(t *testing.T) {
+func TestRunDryRunDefaultsToCurrentRepository(t *testing.T) {
 	app, runner, stdout, stderr := newTestApp()
 
 	code := app.Run(context.Background(), nil)
+
+	if code != 0 {
+		t.Fatalf("exit code = %d, stderr = %s", code, stderr.String())
+	}
+
+	want := strings.Join([]string{
+		"Would remove: /tmp/repo1/.wt/feature-a",
+		"Dry run. found=1. Run 'git wtclean -d' to remove, or 'git wtclean -D' to force remove.",
+		"",
+	}, "\n")
+	if stdout.String() != want {
+		t.Fatalf("stdout = %q, want %q", stdout.String(), want)
+	}
+
+	if got := runner.callsContaining("ghq list"); len(got) != 0 {
+		t.Fatalf("ghq calls = %#v, want none in current-repo mode", got)
+	}
+}
+
+func TestRunOutsideRepositoryErrors(t *testing.T) {
+	app, runner, _, stderr := newTestApp()
+	runner.outsideRepo = true
+
+	code := app.Run(context.Background(), nil)
+
+	if code != 127 {
+		t.Fatalf("exit code = %d, want 127", code)
+	}
+	if !strings.Contains(stderr.String(), "not inside a git repository") {
+		t.Fatalf("stderr = %q", stderr.String())
+	}
+}
+
+func TestRunExcludesCurrentWorktree(t *testing.T) {
+	app, runner, stdout, stderr := newTestApp()
+	runner.currentWorktree = "/tmp/repo1/.wt/feature-a"
+
+	code := app.Run(context.Background(), []string{"-d"})
+
+	if code != 0 {
+		t.Fatalf("exit code = %d, stderr = %s", code, stderr.String())
+	}
+	if got := runner.callsContaining("worktree remove"); len(got) != 0 {
+		t.Fatalf("remove calls = %#v, want none (current worktree must be excluded)", got)
+	}
+	if !strings.Contains(stdout.String(), "found=0") {
+		t.Fatalf("stdout = %q, want found=0", stdout.String())
+	}
+}
+
+func TestRunDryRunAllListsLinkedWorktrees(t *testing.T) {
+	app, runner, stdout, stderr := newTestApp()
+
+	code := app.Run(context.Background(), []string{"--all"})
 
 	if code != 0 {
 		t.Fatalf("exit code = %d, stderr = %s", code, stderr.String())
@@ -64,7 +118,7 @@ func TestRunDryRunListsLinkedWorktrees(t *testing.T) {
 func TestRunDeleteRemovesWithoutForce(t *testing.T) {
 	app, runner, _, stderr := newTestApp()
 
-	code := app.Run(context.Background(), []string{"-d"})
+	code := app.Run(context.Background(), []string{"--all", "-d"})
 
 	if code != 0 {
 		t.Fatalf("exit code = %d, stderr = %s", code, stderr.String())
@@ -82,7 +136,7 @@ func TestRunDeleteRemovesWithoutForce(t *testing.T) {
 func TestRunForceDeleteRemovesWithForce(t *testing.T) {
 	app, runner, _, stderr := newTestApp()
 
-	code := app.Run(context.Background(), []string{"-D"})
+	code := app.Run(context.Background(), []string{"--all", "-D"})
 
 	if code != 0 {
 		t.Fatalf("exit code = %d, stderr = %s", code, stderr.String())
@@ -100,7 +154,7 @@ func TestRunForceDeleteRemovesWithForce(t *testing.T) {
 func TestRunPruneQuietByDefault(t *testing.T) {
 	app, runner, stdout, stderr := newTestApp()
 
-	code := app.Run(context.Background(), []string{"--prune"})
+	code := app.Run(context.Background(), []string{"--all", "--prune"})
 
 	if code != 0 {
 		t.Fatalf("exit code = %d, stderr = %s", code, stderr.String())
@@ -126,7 +180,7 @@ func TestRunPruneQuietByDefault(t *testing.T) {
 func TestRunPruneVerbosePrintsRepositories(t *testing.T) {
 	app, _, stdout, stderr := newTestApp()
 
-	code := app.Run(context.Background(), []string{"--prune", "--verbose"})
+	code := app.Run(context.Background(), []string{"--all", "--prune", "--verbose"})
 
 	if code != 0 {
 		t.Fatalf("exit code = %d, stderr = %s", code, stderr.String())
@@ -180,7 +234,11 @@ func newTestApp() (*App, *fakeRunner, *bytes.Buffer, *bytes.Buffer) {
 }
 
 type fakeRunner struct {
-	calls []string
+	calls       []string
+	outsideRepo bool
+	// currentWorktree overrides the path reported by `git rev-parse
+	// --show-toplevel`. Defaults to the primary worktree of repo1.
+	currentWorktree string
 }
 
 func (r *fakeRunner) Output(_ context.Context, name string, args ...string) ([]byte, error) {
@@ -190,6 +248,24 @@ func (r *fakeRunner) Output(_ context.Context, name string, args ...string) ([]b
 	switch call {
 	case "ghq list -p":
 		return []byte("/tmp/repo1\n/tmp/repo2\n/tmp/not-git\n"), nil
+	case "git worktree list --porcelain -z":
+		if r.outsideRepo {
+			return nil, errors.New("not a git repository")
+		}
+		return porcelain(
+			[]string{"worktree /tmp/repo1", "HEAD 1111111111111111111111111111111111111111", "branch refs/heads/main"},
+			[]string{"worktree /tmp/repo1/.wt/feature-a", "HEAD 2222222222222222222222222222222222222222", "branch refs/heads/feature-a"},
+			[]string{"worktree /tmp/repo1/.wt/bare-cache", "bare"},
+		), nil
+	case "git rev-parse --show-toplevel":
+		if r.outsideRepo {
+			return nil, errors.New("not a git repository")
+		}
+		top := r.currentWorktree
+		if top == "" {
+			top = "/tmp/repo1"
+		}
+		return []byte(top + "\n"), nil
 	case "git -C /tmp/repo1 rev-parse --git-dir", "git -C /tmp/repo2 rev-parse --git-dir":
 		return []byte(".git\n"), nil
 	case "git -C /tmp/not-git rev-parse --git-dir":
