@@ -1,0 +1,46 @@
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+version: 2
+
+project_name: git-wtclean
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: git-wtclean
+    main: ./cmd/git-wtclean
+    binary: git-wtclean
+    env:
+      - CGO_ENABLED=0
+    ldflags:
+      - -s -w -X github.com/rokuosan/git-wtclean/internal/wtclean.Version={{ .Version }}
+    goos:
+      - darwin
+      - linux
+      - windows
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - id: git-wtclean
+    ids:
+      - git-wtclean
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
