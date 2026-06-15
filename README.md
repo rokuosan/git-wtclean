@@ -1,6 +1,6 @@
 # git-wtclean
 
-`git-wtclean` is a Git subcommand for cleaning linked worktrees under repositories managed by [`ghq`](https://github.com/x-motemen/ghq).
+`git-wtclean` is a Git subcommand for cleaning linked worktrees. By default it operates on the current repository; with `--all` it spans every repository managed by [`ghq`](https://github.com/x-motemen/ghq).
 
 It uses Git's native worktree commands:
 
@@ -27,6 +27,8 @@ git wtclean
 
 ## Usage
 
+By default, `git wtclean` operates on the repository containing the current directory. Run it outside a Git repository and it errors, suggesting `--all`.
+
 Dry-run by default:
 
 ```sh
@@ -45,10 +47,18 @@ Force remove linked worktrees:
 git wtclean -D
 ```
 
-Prune stale worktree metadata for each ghq repository:
+Prune stale worktree metadata:
 
 ```sh
 git wtclean --prune
+```
+
+Target every repository listed by `ghq list -p` instead of just the current one:
+
+```sh
+git wtclean --all
+git wtclean --all -d
+git wtclean --all --prune
 ```
 
 Print each repository while pruning:
@@ -60,14 +70,20 @@ git wtclean --prune -v
 
 ## What It Removes
 
-`git wtclean` targets linked worktrees discovered from:
+By default, `git wtclean` resolves the current repository and targets its linked worktrees:
+
+```sh
+git worktree list --porcelain -z
+```
+
+With `--all`, it instead iterates over every repository reported by `ghq`:
 
 ```sh
 ghq list -p
 git -C <repo> worktree list --porcelain -z
 ```
 
-The first worktree entry is treated as the primary worktree and is skipped. Bare worktree entries are also skipped.
+In either case, the first worktree entry is treated as the primary worktree and is skipped. Bare worktree entries are also skipped.
 
 With `-d`, each target is removed with:
 
