@@ -33,7 +33,7 @@ jobs:
           # goreleaser/goreleaser@v2.16.0
           # tag: 4d54523455df2818f4b10e3f0174168acc5c809e
           # commit: d76fb400136f96af3aaa7202776257885c9a6097
-          version: v2.16.0
+          version: v2.18.2
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
